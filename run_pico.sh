@@ -52,6 +52,12 @@ if [[ ! -f "$SCRIPT" ]]; then
 fi
 
 echo "==> Port: $PORT"
+echo "==> Waking board (reset) before upload..."
+# Soft reset first — needed if a prior script is running. If the Pico is in
+# deepsleep it will not answer until you plug USB + press RESET (or wait for wake).
+"$MP" connect "$PORT" reset >/dev/null 2>&1 || true
+sleep 2
+
 echo "==> Uploading firmware/ ..."
 cd "$ROOT/firmware"
 
@@ -75,7 +81,9 @@ fi
 
 if ! "$MP" connect "$PORT" fs cp -r . :; then
   echo ""
-  echo "Upload failed. Quit Thonny completely, then retry."
+  echo "Upload failed / hung."
+  echo "If the board was in deepsleep: plug USB, press the Pico RESET button, wait 2s, retry."
+  echo "Also quit Thonny completely (it locks the serial port)."
   exit 1
 fi
 echo "==> Upload OK"
@@ -90,7 +98,6 @@ fi
 
 echo "==> Running ${TARGET}.py on Pico (Ctrl+C to stop)..."
 echo "---------------------------------------------------"
-# Soft reset, then execute the local file on-device (streams stdout here)
 "$MP" connect "$PORT" reset >/dev/null 2>&1 || true
 sleep 1
 "$MP" connect "$PORT" run "$SCRIPT"

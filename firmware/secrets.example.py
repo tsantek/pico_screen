@@ -41,4 +41,6 @@ TEST_SLEEP_SECONDS = None
 # "deep" = machine.deepsleep (best battery; wake = reset)
 # "idle" = time.sleep chunks (higher power; more reliable wake on UPS)
 SLEEP_MODE = "deep"
+# False = while laptop USB is plugged in, skip deepsleep so ./run_pico.sh works
+SLEEP_WHEN_USB = False
 

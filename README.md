@@ -58,6 +58,31 @@ Footer: UPS battery % and `as of HH:MM` (Phoenix).
 
 Copy [`firmware/secrets.example.py`](firmware/secrets.example.py) → `firmware/secrets.py` (gitignored).
 
+## Host setup (Mac) — Python env + pip
+
+You need **Python 3** on the laptop to talk to the Pico (`mpremote`). Firmware on the Pico is MicroPython — that is separate.
+
+```bash
+# 1) Confirm Python 3
+python3 --version
+
+# 2) From the project root, create a virtualenv
+cd /path/to/pico_screen
+python3 -m venv .venv
+
+# 3) Activate it (optional for ./run_pico.sh — the script uses .venv/bin directly)
+source .venv/bin/activate
+
+# 4) Upgrade pip, then install host tools
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+# (same as: pip install mpremote)
+```
+
+Or let the helper script do it: the first `./run_pico.sh …` creates `.venv` and installs `mpremote` if missing.
+
+Quit **Thonny** before using `run_pico.sh` (it locks the serial port).
+
 ## Deploy
 
 Quit Thonny first. From the project root:
@@ -72,7 +97,17 @@ Quit Thonny first. From the project root:
 ./run_pico.sh --upload-only
 ```
 
-`main.py` auto-runs on power-up. **3s** delay only on non-deepsleep boots so `mpremote` can connect.
+### Updating while it was deepsleeping
+
+Deepsleep ignores USB serial — `./run_pico.sh` will **hang** until the board is awake.
+
+1. Plug in laptop USB.  
+2. Press the Pico **RESET** button (or unplug/replug USB).  
+3. Wait ~2s, then `./run_pico.sh main`.
+
+With `SLEEP_WHEN_USB = False` (default): while USB is plugged in, after a draw the board **skips deepsleep** and stays at REPL so the next upload works. For desk battery mode: **unplug USB → press RESET** (on-device `main.py` starts and deepsleeps on the schedule).
+
+`main.py` auto-runs on power-up. **3s** delay on non-deepsleep boots so `mpremote` can connect.
 
 ## Refresh schedule (`secrets.py`)
 
@@ -81,6 +116,7 @@ Quit Thonny first. From the project root:
 | `ENABLE_DEEPSLEEP = True` | After draw, sleep toward next cycle |
 | `SLEEP_MODE = "deep"` | `machine.deepsleep` (best battery; wake = full reset) |
 | `SLEEP_MODE = "idle"` | Chunked `time.sleep` (safer wake on some UPS setups) |
+| `SLEEP_WHEN_USB = False` | Skip deepsleep while laptop USB is plugged in (so updates don’t hang) |
 | `REFRESH_HOURS = 6` | Phoenix **00 / 06 / 12 / 18** when `TEST_SLEEP_SECONDS=None` |
 | `TEST_SLEEP_SECONDS = 300` | Override: every **5 min** (testing) |
 

@@ -143,31 +143,31 @@ def _icon(fb, kind, x, y, ink=0x00, s=2):
         p(2, 3, 6, 4)
 
 
-# Short ASCII quotes for the greeting line (Goggins / Jocko / Rogan / Hanes).
+# Short ASCII quotes: (text, author)
 _QUOTES = (
     # David Goggins
-    "Stay hard.",
-    "Who's gonna carry the boats?",
-    "Don't stop when you're tired.",
-    "Callous your mind.",
-    "You don't find willpower. You create it.",
+    ("Stay hard.", "Goggins"),
+    ("Who's gonna carry the boats?", "Goggins"),
+    ("Don't stop when you're tired.", "Goggins"),
+    ("Callous your mind.", "Goggins"),
+    ("You don't find willpower. You create it.", "Goggins"),
     # Jocko Willink
-    "Discipline equals freedom.",
-    "Good.",
-    "Get after it.",
-    "Default aggressive.",
-    "Extreme ownership.",
+    ("Discipline equals freedom.", "Jocko"),
+    ("Good.", "Jocko"),
+    ("Get after it.", "Jocko"),
+    ("Default aggressive.", "Jocko"),
+    ("Extreme ownership.", "Jocko"),
     # Joe Rogan
-    "Be the hero of your own movie.",
-    "Just keep moving forward.",
-    "Work out. Eat clean. Repeat.",
-    "Don't be afraid to reinvent yourself.",
+    ("Be the hero of your own movie.", "Rogan"),
+    ("Just keep moving forward.", "Rogan"),
+    ("Work out. Eat clean. Repeat.", "Rogan"),
+    ("Don't be afraid to reinvent yourself.", "Rogan"),
     # Cameron Hanes
-    "Keep hammering.",
-    "Nobody cares. Work harder.",
-    "Strive for greatness.",
-    "Embrace the grind.",
-    "Outwork your potential.",
+    ("Keep hammering.", "Hanes"),
+    ("Nobody cares. Work harder.", "Hanes"),
+    ("Strive for greatness.", "Hanes"),
+    ("Embrace the grind.", "Hanes"),
+    ("Outwork your potential.", "Hanes"),
 )
 
 
@@ -189,7 +189,8 @@ def _quote_for(model, hour):
     for ch in ds:
         seed = (seed + ord(ch)) & 0xFFFF
     seed = (seed + int(hour or 0) * 17) & 0xFFFF
-    return _QUOTES[seed % len(_QUOTES)]
+    text, author = _QUOTES[seed % len(_QUOTES)]
+    return "%s - %s" % (text, author)
 
 
 def _wrap_lines(text, width_chars):
@@ -333,7 +334,7 @@ def draw(epd, model):
     text_big(bk, greet, x, y, 0x00, scale=2)
     y += 28
     q_chars = _max_chars(C1 - PAD - 8, scale=1)
-    y = _draw_wrapped(bk, quote, x, y, q_chars, y + 28, line_h=12, ink=0x00, limit=2)
+    y = _draw_wrapped(bk, quote, x, y, q_chars, y + 40, line_h=12, ink=0x00, limit=3)
     y += 4
     bk.hline(x, y, C1 - PAD - 8, 0x00)
     y += 12

@@ -246,6 +246,18 @@ def _enter_sleep(hour, minute, second, interval_h, test_s, mode):
     sleep_until_boundary(hour, minute, second, interval_h=interval_h, mode=mode)
 
 
+def _should_skip_sleep_for_usb():
+    """While laptop USB is plugged in, stay awake so ./run_pico.sh works."""
+    if bool(_load_optional("SLEEP_WHEN_USB", False)):
+        return False
+    try:
+        from drivers.usb_power import usb_connected
+
+        return usb_connected()
+    except Exception:
+        return False
+
+
 def main():
     """Draw → deepsleep → (reset) → maybe sleep more → draw at boundary."""
     import machine
@@ -267,12 +279,16 @@ def main():
     except Exception:
         pass
 
-    if woke_deep:
+    usb_now = _should_skip_sleep_for_usb()
+
+    if woke_deep and not usb_now:
         print("=== Wake from deepsleep ===")
         time.sleep_ms(300)
     else:
         print("Dashboard starting in 3s (Ctrl+C / mpremote OK now)...")
         time.sleep_ms(3000)
+        if usb_now:
+            print("USB host detected — will skip deepsleep after draw (deploy mode).")
 
     print("=== Pico desk dashboard ===")
     if test_s:
@@ -281,9 +297,11 @@ def main():
         print("Sleep:", enable_sleep, "every", interval_h, "h mode=%s" % mode)
 
     # After deepsleep mid-interval: sleep again without Wi‑Fi / e-ink
+    # (unless USB plugged in — then fall through and draw so updates work)
     if (
         enable_sleep
         and woke_deep
+        and not usb_now
         and (test_s is None or int(test_s) <= 0)
         and mode == "deep"
     ):
@@ -309,6 +327,11 @@ def main():
 
         if not enable_sleep:
             print("ENABLE_DEEPSLEEP=False — exiting loop (REPL OK).")
+            return
+
+        if _should_skip_sleep_for_usb():
+            print("USB still connected — skipping deepsleep (REPL OK for ./run_pico.sh).")
+            print("For desk battery mode: unplug USB, then press RESET (or power-cycle).")
             return
 
         _enter_sleep(hour, minute, second, interval_h, test_s, mode)

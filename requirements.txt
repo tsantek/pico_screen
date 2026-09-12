@@ -1,0 +1,2 @@
+# Host-side tools (Mac/Linux) — not uploaded to the Pico
+mpremote>=1.24.0
