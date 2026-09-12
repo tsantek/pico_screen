@@ -1,9 +1,14 @@
-"""Minimal HTTPS GET for MicroPython (urequests)."""
+"""Minimal HTTPS helpers for MicroPython (urequests)."""
 
 try:
     import urequests as requests
 except ImportError:
     import requests
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 
 def http_get(url, headers=None, timeout=30):
@@ -28,7 +33,29 @@ def http_get(url, headers=None, timeout=30):
 
 
 def http_get_json(url, headers=None, timeout=30):
-    import json
-
     text = http_get(url, headers=headers, timeout=timeout)
     return json.loads(text)
+
+
+def http_post_json(url, body, headers=None, timeout=60):
+    """POST JSON body; return parsed JSON. Accepts 200/201/202."""
+    resp = None
+    hdrs = dict(headers or {})
+    hdrs["Content-Type"] = "application/json"
+    data = json.dumps(body)
+    try:
+        try:
+            resp = requests.post(url, data=data, headers=hdrs, timeout=timeout)
+        except TypeError:
+            resp = requests.post(url, data=data, headers=hdrs)
+        code = resp.status_code
+        if code not in (200, 201, 202):
+            raise OSError("HTTP %s POST %s" % (code, url[:48]))
+        text = resp.text
+        return json.loads(text) if text else {}
+    finally:
+        if resp is not None:
+            try:
+                resp.close()
+            except Exception:
+                pass

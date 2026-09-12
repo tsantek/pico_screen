@@ -143,15 +143,53 @@ def _icon(fb, kind, x, y, ink=0x00, s=2):
         p(2, 3, 6, 4)
 
 
+# Short ASCII quotes for the greeting line (Goggins / Jocko / Rogan / Hanes).
+_QUOTES = (
+    # David Goggins
+    "Stay hard.",
+    "Who's gonna carry the boats?",
+    "Don't stop when you're tired.",
+    "Callous your mind.",
+    "You don't find willpower. You create it.",
+    # Jocko Willink
+    "Discipline equals freedom.",
+    "Good.",
+    "Get after it.",
+    "Default aggressive.",
+    "Extreme ownership.",
+    # Joe Rogan
+    "Be the hero of your own movie.",
+    "Just keep moving forward.",
+    "Work out. Eat clean. Repeat.",
+    "Don't be afraid to reinvent yourself.",
+    # Cameron Hanes
+    "Keep hammering.",
+    "Nobody cares. Work harder.",
+    "Strive for greatness.",
+    "Embrace the grind.",
+    "Outwork your potential.",
+)
+
+
 def _greeting(hour):
     if hour is None:
-        return "Hello", "Have a great day!"
+        return "Hello", 0
     h = int(hour)
     if h < 12:
-        return "Good Morning", "Have a great day!"
+        return "Good Morning", h
     if h < 17:
-        return "Good Afternoon", "Keep going!"
-    return "Good Evening", "Wind down well."
+        return "Good Afternoon", h
+    return "Good Evening", h
+
+
+def _quote_for(model, hour):
+    """Rotate quote by date + hour so it changes through the day."""
+    seed = 0
+    ds = model.get("date_str") or ""
+    for ch in ds:
+        seed = (seed + ord(ch)) & 0xFFFF
+    seed = (seed + int(hour or 0) * 17) & 0xFFFF
+    return _QUOTES[seed % len(_QUOTES)]
 
 
 def _wrap_lines(text, width_chars):
@@ -273,7 +311,8 @@ def draw(epd, model):
     unit = model.get("temp_unit") or "F"
     hour = model.get("hour")
     minute = model.get("minute") or 0
-    greet, sub = _greeting(hour)
+    greet, _h = _greeting(hour)
+    quote = _quote_for(model, hour)
 
     # Column rules
     bk.vline(C1, PAD, H - 2 * PAD, 0x00)
@@ -293,8 +332,9 @@ def draw(epd, model):
 
     text_big(bk, greet, x, y, 0x00, scale=2)
     y += 28
-    bk.text(sub, x, y, 0x00)
-    y += 14
+    q_chars = _max_chars(C1 - PAD - 8, scale=1)
+    y = _draw_wrapped(bk, quote, x, y, q_chars, y + 28, line_h=12, ink=0x00, limit=2)
+    y += 4
     bk.hline(x, y, C1 - PAD - 8, 0x00)
     y += 12
 
