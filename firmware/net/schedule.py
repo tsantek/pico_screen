@@ -1,14 +1,12 @@
-"""Low-power sleep that resumes in-place (works without USB).
+"""Sleep between dashboard cycles (works without USB).
 
-Pico deepsleep resets the chip and often fails to wake when USB is unplugged.
-lightsleep (+ time.sleep fallback) keeps main.py looping on UPS power alone.
+Chunked time.sleep is higher power than deepsleep/lightsleep but reliably
+resumes the main loop on UPS after USB unplug.
 """
 
-import machine
 import time
 
-# RP2: sleep arg max ≈ 71.5 minutes
-_MAX_SLEEP_MS = 70 * 60 * 1000
+_CHUNK_MS = 30_000
 
 
 def ms_until_next_interval(hour, minute, second, interval_h=6):
@@ -31,27 +29,20 @@ def next_boundary_hms(hour, minute, second, interval_h=6):
 
 
 def low_power_sleep(ms):
-    """Sleep ms milliseconds; resume here (no full reset)."""
+    """Sleep the full ms (30s chunks); resume here (no full reset)."""
     if ms < 100:
         return
-    if ms > _MAX_SLEEP_MS:
-        ms = _MAX_SLEEP_MS
-    print("Sleep %ds (lightsleep, USB optional)..." % (ms // 1000))
+    print("Sleep %ds (time.sleep chunks, USB optional)..." % (ms // 1000))
     time.sleep_ms(300)
-    try:
-        machine.lightsleep(ms)
-    except Exception as e:
-        print("lightsleep failed (%s) — using time.sleep" % e)
-        # Chunk time.sleep so we can still recover
-        left = ms
-        while left > 0:
-            chunk = 30000 if left > 30000 else left
-            time.sleep_ms(chunk)
-            left -= chunk
+    left = ms
+    while left > 0:
+        chunk = _CHUNK_MS if left > _CHUNK_MS else left
+        time.sleep_ms(chunk)
+        left -= chunk
 
 
 def sleep_until_boundary(hour, minute, second, interval_h=6):
-    """Sleep until next interval; may return early if max-sleep capped."""
+    """Sleep until next Phoenix interval boundary (e.g. 00/06/12/18)."""
     want = ms_until_next_interval(hour, minute, second, interval_h)
     nh, nm, _ = next_boundary_hms(hour, minute, second, interval_h)
     print("Next draw target %02d:%02d PHX (%dh) — %ds away" % (nh, nm, interval_h, want // 1000))
@@ -59,5 +50,5 @@ def sleep_until_boundary(hour, minute, second, interval_h=6):
 
 
 def deep_sleep_hours(hour, minute, second, interval_h=6):
-    """Back-compat name — uses lightsleep, not deepsleep."""
+    """Back-compat name — uses chunked sleep, not deepsleep."""
     sleep_until_boundary(hour, minute, second, interval_h)

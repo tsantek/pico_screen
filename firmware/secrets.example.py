@@ -26,11 +26,11 @@ TZ_NAME = "America/Phoenix"
 # True = always draw on wake (keep True for 6h schedule).
 FORCE_REFRESH = True
 
-# After draw, lightsleep then fetch+draw again.
+# After draw, sleep then fetch+draw again.
 # Every 5 min: TEST_SLEEP_SECONDS=300
 # Hourly: REFRESH_HOURS=1, TEST_SLEEP_SECONDS=None
 # Every 6h: REFRESH_HOURS=6, TEST_SLEEP_SECONDS=None
 ENABLE_DEEPSLEEP = True
 REFRESH_HOURS = 6
-TEST_SLEEP_SECONDS = 300
+TEST_SLEEP_SECONDS = None
 
