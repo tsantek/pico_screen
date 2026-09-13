@@ -78,7 +78,9 @@ def build_model(rtc_tuple, battery_pct):
             from net import ical
 
             gc.collect()
-            model["calendar"] = ical.fetch(secrets.ICAL_URL, today_ymd)
+            urls = getattr(secrets, "ICAL_URLS", None) or getattr(secrets, "ICAL_URL", None)
+            use_cache = bool(_load_optional("ICAL_CACHE_DAY", True))
+            model["calendar"] = ical.fetch_many(urls, today_ymd, use_cache=use_cache)
             print(
                 "Calendar today:",
                 len(model["calendar"]["today"]),
@@ -102,6 +104,7 @@ def build_model(rtc_tuple, battery_pct):
                 now_ymd=today_ymd,
                 now_hour=hour,
                 hours_ahead=12,
+                use_cache=bool(_load_optional("WEATHER_CACHE_DAY", True)),
             )
             print("Weather OK, hourly:", len(model["weather"].get("hourly") or []))
         except Exception as e:
@@ -117,13 +120,17 @@ def build_model(rtc_tuple, battery_pct):
                 "CURSOR_AGENT_NEXT_ID", None
             )
             prompt_on = bool(_load_optional("AGENT_PROMPT_ON_REFRESH", True))
+            # Agent cloud run is the longest radio time — skip POST when UPS is low
+            if prompt_on and battery_pct is not None and battery_pct < 30:
+                print("Battery %s%% — skip agent prompt (read-only)" % battery_pct)
+                prompt_on = False
             model["agent"] = cursor_agent.fetch(
                 secrets.CURSOR_API_KEY,
                 agent_id,
                 prompt_on_refresh=prompt_on,
                 prompt_text=_load_optional("AGENT_STATUS_PROMPT", None),
                 poll_s=int(_load_optional("AGENT_POLL_SECONDS", 8)),
-                timeout_s=int(_load_optional("AGENT_POLL_TIMEOUT", 240)),
+                timeout_s=int(_load_optional("AGENT_POLL_TIMEOUT", 90)),
             )
             print(
                 "Agent source:",

@@ -417,19 +417,21 @@ def draw(epd, model):
     bk.hline(x, y, col_w, 0x00)
     y += 10
 
+    # Keep Today ~20% shorter so Tomorrow gets more vertical room
+    today_limit = 208
     if not today:
         bk.text("(no meetings)", x, y, 0x00)
         y += 18
     else:
-        for ev in today[:5]:
-            if y + 36 > 260:
+        for ev in today[:4]:
+            if y + 28 > today_limit:
                 bk.text("...", x, y, 0x00)
                 y += 14
                 break
-            y = _draw_event_row(bk, ev, x, y, col_w, time_w, compact=False)
+            y = _draw_event_row(bk, ev, x, y, col_w, time_w, compact=True)
 
     # Tomorrow
-    y = max(y + 6, 250)
+    y = max(y + 6, 200)
     bk.hline(x, y, col_w, 0x00)
     y += 8
     text_big(bk, "Tomorrow", x, y, 0x00, scale=2)
@@ -438,7 +440,7 @@ def draw(epd, model):
         bk.text("(open day)", x, y, 0x00)
         y += 14
     else:
-        for ev in tomorrow[:3]:
+        for ev in tomorrow[:5]:
             if y + 24 > H - 120:
                 break
             y = _draw_event_row(bk, ev, x, y, col_w, time_w, compact=True)

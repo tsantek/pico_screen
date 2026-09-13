@@ -1,6 +1,11 @@
-"""Open-Meteo: current + today + next N hours."""
+"""Open-Meteo: current + today + next N hours.
+
+Optional same-day flash cache (WEATHER_CACHE_DAY) — one download per Phoenix day.
+"""
 
 from net.http import http_get_json
+
+_CACHE_PATH = "wx_cache.json"
 
 _CODES = {
     0: "Clear",
@@ -73,7 +78,65 @@ def _wind_dir(deg):
     return dirs[int((deg + 22.5) // 45) % 8]
 
 
-def fetch(
+def _json():
+    try:
+        import ujson as json
+    except ImportError:
+        import json
+    return json
+
+
+def _cache_load(today_ymd):
+    try:
+        json = _json()
+        with open(_CACHE_PATH, "r") as f:
+            data = json.loads(f.read())
+        ymd = data.get("ymd")
+        if not ymd or tuple(ymd) != tuple(today_ymd):
+            return None
+        return data.get("weather")
+    except Exception:
+        return None
+
+
+def _cache_save(today_ymd, weather):
+    try:
+        json = _json()
+        payload = {
+            "ymd": [int(today_ymd[0]), int(today_ymd[1]), int(today_ymd[2])],
+            "weather": weather,
+        }
+        with open(_CACHE_PATH, "w") as f:
+            f.write(json.dumps(payload))
+        print("Weather cached for %04d-%02d-%02d" % tuple(today_ymd))
+    except Exception as e:
+        print("Weather cache save failed:", e)
+
+
+def _trim_hourly(weather, now_ymd, now_hour, hours_ahead):
+    """From a day cache, show hourly starting at current hour."""
+    if not weather:
+        return weather
+    out = {
+        "current": weather.get("current"),
+        "today": weather.get("today"),
+        "hourly": [],
+    }
+    hourly = weather.get("hourly") or []
+    started = False
+    for slot in hourly:
+        hour = int(slot.get("hour", -1))
+        if not started:
+            if hour < int(now_hour):
+                continue
+            started = True
+        out["hourly"].append(slot)
+        if len(out["hourly"]) >= int(hours_ahead):
+            break
+    return out
+
+
+def _fetch_network(
     lat,
     lon,
     temp_unit="fahrenheit",
@@ -126,6 +189,8 @@ def fetch(
             "precip": precip,
         }
 
+    # Store a full day+ of hourly in cache so later draws can trim
+    store_hours = max(int(hours_ahead), 24)
     hourly = []
     h = data.get("hourly") or {}
     times = h.get("time") or []
@@ -142,7 +207,7 @@ def fetch(
             if hour < int(now_hour):
                 continue
             started = True
-        if len(hourly) >= hours_ahead:
+        if len(hourly) >= store_hours:
             break
         code = int(codes[i]) if i < len(codes) else 0
         pr = None
@@ -160,3 +225,33 @@ def fetch(
         )
 
     return {"current": current, "today": today, "hourly": hourly}
+
+
+def fetch(
+    lat,
+    lon,
+    temp_unit="fahrenheit",
+    timezone="America/Phoenix",
+    now_ymd=None,
+    now_hour=0,
+    hours_ahead=6,
+    use_cache=True,
+):
+    if use_cache and now_ymd:
+        cached = _cache_load(now_ymd)
+        if cached is not None:
+            print("Weather from cache")
+            return _trim_hourly(cached, now_ymd, now_hour, hours_ahead)
+
+    weather = _fetch_network(
+        lat,
+        lon,
+        temp_unit=temp_unit,
+        timezone=timezone,
+        now_ymd=now_ymd,
+        now_hour=now_hour,
+        hours_ahead=hours_ahead,
+    )
+    if use_cache and now_ymd:
+        _cache_save(now_ymd, weather)
+    return _trim_hourly(weather, now_ymd, now_hour, hours_ahead)

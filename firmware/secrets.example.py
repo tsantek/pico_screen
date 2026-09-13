@@ -7,8 +7,16 @@ WIFI_PASSWORD = "your-password"
 WIFI_CHANNEL = 2  # or None
 WIFI_COUNTRY = "US"
 
-# Google Calendar → Settings → Integrate calendar → Secret address in iCal format
+# Google Calendar → Settings → Integrate calendar → Secret (or public) iCal address
+# One calendar:
 ICAL_URL = "https://calendar.google.com/calendar/ical/xxx/private-xxx/basic.ics"
+# Or merge two+ (preferred if set — overrides ICAL_URL):
+# ICAL_URLS = (
+#     "https://calendar.google.com/calendar/ical/personal/.../basic.ics",
+#     "https://calendar.google.com/calendar/ical/work/.../basic.ics",
+# )
+# Cache today+tomorrow on Pico flash; skip ICS download until next Phoenix day
+ICAL_CACHE_DAY = True
 
 # Cursor Dashboard → API Keys
 CURSOR_API_KEY = "key_xxx"
@@ -24,6 +32,7 @@ AGENT_POLL_TIMEOUT = 240
 WEATHER_LAT = 33.4484
 WEATHER_LON = -112.0740
 WEATHER_TEMP_UNIT = "fahrenheit"  # or "celsius"
+WEATHER_CACHE_DAY = True  # one Open-Meteo download per Phoenix day
 
 # America/Phoenix = UTC-7 year-round (no DST). Keep DS3231 set to Phoenix local time.
 TZ_NAME = "America/Phoenix"
