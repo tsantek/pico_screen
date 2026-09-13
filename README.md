@@ -2,7 +2,7 @@
 
 Pico-only desk dashboard: Wi‑Fi fetch → draw e-ink → **deepsleep** → wake → repeat. Time zone is **America/Phoenix** (UTC−7, no DST).
 
-Default refresh: **every 6 hours** at Phoenix **00:00 / 06:00 / 12:00 / 18:00** (draw window = first 5 minutes after each boundary).
+Default refresh: **3×/day** Phoenix **06:00 / 12:00 / 18:00** via **DS3231 alarm → GP3**, Pico in **deepsleep** (UPS battery save). Clock board holds the timer; Pico stays off between draws.
 
 ## Hardware
 
@@ -19,7 +19,8 @@ Bring-up scripts: [`bringup/`](bringup/).
 | **Big (UPS LiPo)** | Powers Pico + screen when laptop USB is unplugged. Keep UPS **switch ON** for desk use. |
 | **Small (RTC CR2032)** | Keeps **date/time** only when main power is dead. Does **not** run the Pico or wake it. |
 
-Wake is **`machine.deepsleep`** (software timer, max ~70 min per nap). For a 6h gap the Pico wakes, checks the RTC, and deepsleeps again **without redrawing** until the next boundary. RTC alarm / solder **R5→GP3** is optional and **not used**.
+Wake is **DS3231 Alarm1 → INT → GP3 (R5)** then Pico **deepsleep**. That is the UPS-friendly design: the RTC keeps time/alarm on the coin cell + board power; the Pico is powered down between draws.  
+`RTC_ALARM_TEST_MINUTES = 2` arms alarm in 2 minutes (same deepsleep path) — unplug USB and watch panel `as of`. Set to `None` for 06/12/18.
 
 ### UPS / unplug
 
@@ -92,6 +93,8 @@ Quit Thonny first. From the project root:
 ./run_pico.sh demo_offline   # layout preview (no Wi‑Fi)
 ./run_pico.sh set_rtc        # set DS3231 from Mac Phoenix time
 ./run_pico.sh rtc_check      # coin cell / OSF / year-2000
+./run_pico.sh rtc_alarm_test # DS3231 INT→GP3 alarm wiring (~90s, no sleep)
+./run_pico.sh rtc_wake_test  # arm → deepsleep → wake → draw TEST + date
 ./run_pico.sh agent_dump     # raw Cursor agent runs
 ./run_pico.sh wifi_test
 ./run_pico.sh --upload-only
@@ -113,12 +116,12 @@ With `SLEEP_WHEN_USB = False` (default): while USB is plugged in, after a draw t
 
 | Setting | Effect |
 |---------|--------|
-| `ENABLE_DEEPSLEEP = True` | After draw, sleep toward next cycle |
-| `SLEEP_MODE = "deep"` | `machine.deepsleep` (best battery; wake = full reset) |
-| `SLEEP_MODE = "idle"` | Chunked `time.sleep` (safer wake on some UPS setups) |
-| `SLEEP_WHEN_USB = False` | Skip deepsleep while laptop USB is plugged in (so updates don’t hang) |
-| `REFRESH_HOURS = 6` | Phoenix **00 / 06 / 12 / 18** when `TEST_SLEEP_SECONDS=None` |
-| `TEST_SLEEP_SECONDS = 300` | Override: every **5 min** (testing) |
+| `DRAW_HOURS = (6, 12, 18)` | Phoenix **06:00 / 12:00 / 18:00** |
+| `USE_RTC_ALARM = True` | DS3231 Alarm1 → GP3 (R5); Pico **deepsleep** between draws |
+| `RTC_ALARM_TEST_MINUTES = None` | Production. Set `3` to test alarm wake every 3 min |
+| `SLEEP_MODE = "deep"` | `machine.deepsleep` until RTC INT |
+| `SLEEP_WHEN_USB = False` | Skip deepsleep while laptop USB is plugged in |
+| `AGENT_PROMPT_ON_REFRESH` | POST status template each draw (3×/day) |
 
 ## Time / RTC
 

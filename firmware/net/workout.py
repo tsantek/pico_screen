@@ -186,6 +186,46 @@ def _duration(text):
     return None
 
 
+def _clean_val(v, maxlen=40):
+    """Drop empty / dash / leaked next-label junk."""
+    if not v:
+        return None
+    v = _ascii_fold(_strip_md(v)).strip()
+    if not v or v in ("-", "--", "n/a", "none", "."):
+        return None
+    low = _lower(v)
+    # Values that are clearly another field leaking in
+    for bad in (
+        "title:",
+        "kind:",
+        "duration:",
+        "pattern:",
+        "distance:",
+        "stroke:",
+        "run pace:",
+        "walk:",
+        "incline:",
+        "avg hr:",
+        "soft max:",
+        "fuel:",
+    ):
+        if low == bad.strip(":") or low.startswith(bad):
+            return None
+    if low.startswith("pace:") and len(v) < 12:
+        return None
+    return v[:maxlen]
+
+
+def _kind_from_text(raw, fallback):
+    for line in (raw or "").split("\n"):
+        s = line.strip()
+        if _lower(s).startswith("kind:"):
+            k = s.split(":", 1)[1].strip().upper()
+            if k in ("RUN", "GYM", "BIKE", "SWIM"):
+                return k
+    return fallback
+
+
 def parse_workout(result_md, agent_name=None):
     """Return a compact workout card dict from agent result markdown."""
     raw = result_md or ""
@@ -197,18 +237,28 @@ def parse_workout(result_md, agent_name=None):
             "lines": [],
         }
 
-    kind = detect_type(raw)
+    kind = _kind_from_text(raw, detect_type(raw))
     title = _first_heading(raw) or (agent_name or "Workout")
+    # Prefer TITLE: line from template
+    for line in raw.split("\n"):
+        s = line.strip()
+        if _lower(s).startswith("title:"):
+            t = _clean_val(s.split(":", 1)[1], 40)
+            if t:
+                title = t
+            break
     title = _ascii_fold(title)
 
-    duration = _duration(raw)
-    hr = _find_after(("Avg HR", "HR", "Puls"), raw, 48)
-    pace = _find_after(("Run", "Pace", "Brzina", "Tempo"), raw, 48)
-    walk = _find_after(("Hod", "Walk"), raw, 40)
-    incline = _find_after(("Nagib", "Incline"), raw, 24)
-    soft = _find_after(("Soft max", "Max HR"), raw, 40)
+    duration = _clean_val(_duration(raw))
+    hr = _clean_val(_find_after(("Avg HR", "Puls"), raw, 48))
+    soft = _clean_val(_find_after(("Soft max", "Max HR"), raw, 40))
+    pattern = _clean_val(_find_after(("Pattern",), raw, 40))
+    distance = _clean_val(_find_after(("Distance", "Dist", "Laps"), raw, 40))
+    stroke = _clean_val(_find_after(("Stroke", "Stil"), raw, 32))
+    pace = _clean_val(_find_after(("Run pace", "Pace", "Brzina", "Tempo"), raw, 48))
+    walk = _clean_val(_find_after(("Hod", "Walk"), raw, 40))
+    incline = _clean_val(_find_after(("Nagib", "Incline"), raw, 24))
 
-    # Fuel one-liner
     fuel_bits = []
     low = _lower(raw)
     if "tailwind" in low:
@@ -221,32 +271,53 @@ def parse_workout(result_md, agent_name=None):
         fuel_bits.append("water")
     fuel = " + ".join(fuel_bits) if fuel_bits else None
 
-    # Interval cue e.g. 25/5
-    interval = None
-    if "25/5" in raw:
-        interval = "25/5 run/walk"
-    elif "run 25" in low and "hod 5" in low:
-        interval = "25/5 run/walk"
+    if not pattern:
+        if "25/5" in raw:
+            pattern = "25/5 run/walk"
+        elif "run 25" in low and "hod 5" in low:
+            pattern = "25/5 run/walk"
 
     lines = []
     if duration:
-        lines.append(("Duration", _ascii_fold(duration)))
-    if interval:
-        lines.append(("Pattern", interval))
-    if pace:
-        lines.append(("Run pace", _ascii_fold(pace)))
-    if walk:
-        lines.append(("Walk", _ascii_fold(walk)))
-    if incline:
-        lines.append(("Incline", _ascii_fold(incline)))
+        lines.append(("Duration", duration))
+
+    if kind == "SWIM":
+        if distance:
+            lines.append(("Distance", distance))
+        if stroke:
+            lines.append(("Stroke", stroke))
+        if pattern:
+            lines.append(("Pattern", pattern))
+    elif kind == "BIKE":
+        if distance:
+            lines.append(("Distance", distance))
+        if pace:
+            lines.append(("Pace", pace))
+        if pattern:
+            lines.append(("Pattern", pattern))
+    elif kind == "GYM":
+        if pattern:
+            lines.append(("Focus", pattern))
+    else:
+        # RUN / WORKOUT
+        if pattern:
+            lines.append(("Pattern", pattern))
+        if pace:
+            lines.append(("Run pace", pace))
+        if walk:
+            lines.append(("Walk", walk))
+        if incline:
+            lines.append(("Incline", incline))
+        if distance and kind == "RUN":
+            lines.append(("Distance", distance))
+
     if hr:
-        lines.append(("Avg HR", _ascii_fold(hr)))
+        lines.append(("Avg HR", hr))
     if soft:
-        lines.append(("Soft max", _ascii_fold(soft)))
+        lines.append(("Soft max", soft))
     if fuel:
         lines.append(("Fuel", fuel))
 
-    # If we failed to extract structured stats, fall back to a few clean lines
     if not lines:
         plain = _ascii_fold(_strip_md(raw))
         chunk = plain[:160]
@@ -258,7 +329,7 @@ def parse_workout(result_md, agent_name=None):
 
     return {
         "ok": True,
-        "kind": kind,  # RUN / GYM / BIKE / SWIM / WORKOUT
+        "kind": kind,
         "title": title,
         "lines": lines[:8],
     }

@@ -21,13 +21,20 @@ Using this agent's conversation / plan context, report:
 2) LAST completed workout
 
 Reply with ONLY the markdown below. ASCII only. No extra commentary.
-Fill every field; use - if unknown. KIND must be one of: RUN GYM BIKE SWIM
+KIND must be one of: RUN GYM BIKE SWIM
+Use - for unknown fields.
+For SWIM fill Distance/Stroke; leave Run pace/Walk/Incline as -
+For BIKE fill Pace as km/h or watts; leave Walk/Incline as -
+For GYM fill Pattern as sets focus; leave Run pace/Walk/Incline as -
+For RUN fill Pattern/Run pace/Walk/Incline as needed
 
 ## NEXT
 KIND: RUN
 TITLE: short title under 40 chars
 Duration: e.g. 2:30-2:45 or 45:00
 Pattern: e.g. 25/5 run/walk or -
+Distance: e.g. 2000m or 7.5 km or -
+Stroke: e.g. freestyle or -   (SWIM only; else -)
 Run pace: e.g. 7.0-8.0 km/h or -
 Walk: e.g. 5.0-5.5 km/h or -
 Incline: e.g. 1-2% or -
@@ -39,7 +46,9 @@ Fuel: e.g. TW + gel + water or -
 KIND: BIKE
 TITLE: short title under 40 chars
 Duration: e.g. 45:00
-Pattern: e.g. 25/5 run/walk or -
+Pattern: -
+Distance: -
+Stroke: -
 Run pace: -
 Walk: -
 Incline: -

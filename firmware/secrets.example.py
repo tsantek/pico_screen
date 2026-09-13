@@ -32,15 +32,16 @@ TZ_NAME = "America/Phoenix"
 FORCE_REFRESH = True
 
 # After draw, sleep then wake for next cycle.
-# Every 5 min: TEST_SLEEP_SECONDS=300
-# Hourly: REFRESH_HOURS=1, TEST_SLEEP_SECONDS=None
-# Every 6h: REFRESH_HOURS=6, TEST_SLEEP_SECONDS=None
+# Phoenix draw times:
+DRAW_HOURS = (6, 12, 18)  # 6am, 12pm, 6pm (no midnight)
+TEST_SLEEP_SECONDS = None  # or 300 for every-5-min timed testing
 ENABLE_DEEPSLEEP = True
-REFRESH_HOURS = 6
-TEST_SLEEP_SECONDS = None
-# "deep" = machine.deepsleep (best battery; wake = reset)
-# "idle" = time.sleep chunks (higher power; more reliable wake on UPS)
+REFRESH_HOURS = 6  # unused when DRAW_HOURS is set
+USE_RTC_ALARM = True
+RTC_INT_PIN = 3
+RTC_ALARM_TEST_MINUTES = None  # or 3 for quick alarm test; None = DRAW_HOURS
 SLEEP_MODE = "deep"
-# False = while laptop USB is plugged in, skip deepsleep so ./run_pico.sh works
-SLEEP_WHEN_USB = False
+SLEEP_WHEN_USB = False  # legacy; prefer SKIP_SLEEP_WHEN_USB
+SKIP_SLEEP_WHEN_USB = False  # True only while developing on laptop USB
+UNPLUG_COUNTDOWN_SECONDS = 10
 

@@ -79,6 +79,48 @@ class DS3231:
         """True if coin-cell backup failed / time was lost."""
         return bool(self._read(0x0F, 1)[0] & 0x80)
 
+    def status(self):
+        return self._read(0x0F, 1)[0]
+
+    def control(self):
+        return self._read(0x0E, 1)[0]
+
+    def clear_alarm_flags(self):
+        """Clear A1F/A2F so INT can go high again."""
+        st = self._read(0x0F, 1)[0]
+        self._write(0x0F, bytes([st & 0xFC]))
+
+    def alarm1_fired(self):
+        return bool(self._read(0x0F, 1)[0] & 0x01)
+
+    def set_alarm1_hm(self, hour, minute, second=0):
+        """Alarm1 matches hour:minute:second every day (INT active-low).
+
+        Requires Waveshare R5 soldered (INT → GP3).
+        """
+        # Alarm1 regs 0x07..0x0A; bit7=1 means "ignore this field"
+        # Match sec + min + hour; ignore day/date (A1M4=1)
+        payload = bytes(
+            [
+                _dec2bcd(int(second) % 60),  # 0x07 A1M1=0
+                _dec2bcd(int(minute) % 60),  # 0x08 A1M2=0
+                _dec2bcd(int(hour) % 24),  # 0x09 A1M3=0
+                0x80,  # 0x0A ignore day/date
+            ]
+        )
+        self._write(0x07, payload)
+        # Control 0x0E: INTCN=1, A1IE=1, A2IE=0, EOSC=0
+        ctrl = self._read(0x0E, 1)[0]
+        ctrl = (ctrl | 0x05) & ~0x02  # set INTCN|A1IE, clear A2IE
+        ctrl &= ~0x40  # ensure oscillator on (EOSC=0 means enabled on DS3231)
+        self._write(0x0E, bytes([ctrl & 0xFF]))
+        self.clear_alarm_flags()
+
+    def disable_alarms(self):
+        ctrl = self._read(0x0E, 1)[0]
+        self._write(0x0E, bytes([ctrl & ~0x03]))
+        self.clear_alarm_flags()
+
     def format(self):
         y, mo, d, _w, h, mi, s = self.datetime()
         return "%04d-%02d-%02d %02d:%02d:%02d" % (y, mo, d, h, mi, s)
