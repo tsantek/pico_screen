@@ -4,6 +4,11 @@ Wi‑Fi fetch → draw e-ink → **deepsleep** → wake → repeat.
 Timezone: **America/Phoenix** (UTC−7, no DST).  
 Draws **3×/day** at **06:00 / 12:00 / 18:00**.
 
+![Dashboard preview](docs/dashboard.png)
+
+License: [MIT](LICENSE) — Copyright (c) 2026 Tom Santek.  
+Waveshare e-Paper driver code retains its original MIT notice.
+
 ## Hardware
 
 ```
@@ -12,8 +17,10 @@ UPS (LiPo) → RTC (DS3231 + coin cell) → e-Paper 7.5" B → Pico 2 W
 
 | Battery | Role |
 |---------|------|
-| **UPS LiPo** | Powers Pico + screen on the desk. Keep UPS **ON**. |
-| **RTC CR2032** | Keeps clock time only. Does **not** run or wake the Pico. |
+| **UPS LiPo** | Powers (and wakes) the Pico + screen. Keep UPS **ON**. |
+| **RTC CR2032** | Backs up DS3231 time if UPS power is gone. Not a wake/run battery. |
+
+With Waveshare **R5** soldered (RTC **INT → GP3**), firmware arms **Alarm1** for the next `DRAW_HOURS` slot. Actual wake is mostly timed `deepsleep` naps (Pico max ~70 min; GPIO wake from deepsleep is unreliable on Pico 2 W). The coin cell does not power those wakes.
 
 Optional: wall USB into the **UPS** charge port so the pack stays topped up.
 
@@ -120,3 +127,4 @@ Low-level I2C / e-paper checks: [`bringup/`](bringup/).
 - E-ink full refresh flickers ~15–25s  
 - Calendar ICS feeds can be large; day-cache avoids re-download at noon/evening  
 - Workout kinds: `RUN` / `GYM` / `BIKE` / `SWIM`  
+- Regenerate the README preview: `python3 tools/render_preview.py`  
