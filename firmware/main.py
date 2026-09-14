@@ -288,6 +288,8 @@ def _enter_sleep(hour, minute, second, interval_h, test_s, mode, draw_hours):
         sleep_until_rtc_alarm,
     )
 
+    _mark_sleeping()
+
     use_alarm = bool(_load_optional("USE_RTC_ALARM", False))
     alarm_test_min = _load_optional("RTC_ALARM_TEST_MINUTES", None)
     int_pin = int(_load_optional("RTC_INT_PIN", 3))
@@ -354,24 +356,56 @@ def _load_draw_hours():
     return None
 
 
-def _should_skip_sleep_for_usb():
-    """Opt-in: stay awake with laptop USB so ./run_pico.sh keeps working.
-
-    Default is False — UPS often backfeeds VBUS so WL_GPIO2 can look "USB"
-    even with the laptop unplugged, which used to skip deepsleep forever.
-    Set SKIP_SLEEP_WHEN_USB=True only while developing on USB.
-    """
-    if _load_optional("RTC_ALARM_TEST_MINUTES", None):
-        return False  # allow alarm test with USB connected
-    # Legacy alias
-    if bool(_load_optional("SLEEP_WHEN_USB", False)):
-        return False
-    if not bool(_load_optional("SKIP_SLEEP_WHEN_USB", False)):
-        return False
+def _usb_cable_present():
+    """True when Pico USB VBUS looks present (laptop data cable)."""
     try:
         from drivers.usb_power import usb_connected
 
-        return usb_connected()
+        return bool(usb_connected())
+    except Exception:
+        return False
+
+
+def _should_skip_sleep_for_usb():
+    """After a draw: stay awake while laptop USB is plugged (deploy mode).
+
+    SKIP_SLEEP_WHEN_USB defaults True. Set False only if UPS false-triggers VBUS.
+    SLEEP_WHEN_USB=True forces sleep even with USB (legacy).
+    """
+    if _load_optional("RTC_ALARM_TEST_MINUTES", None):
+        return False
+    if bool(_load_optional("SLEEP_WHEN_USB", False)):
+        return False
+    if _load_optional("SKIP_SLEEP_WHEN_USB", None) is False:
+        return False
+    return _usb_cable_present()
+
+
+def _mark_sleeping():
+    try:
+        with open("SLEEPING", "w") as f:
+            f.write("1")
+    except Exception:
+        pass
+
+
+def _clear_sleeping():
+    try:
+        import os
+
+        os.remove("SLEEPING")
+    except Exception:
+        pass
+
+
+def _came_from_sleep(woke_deep):
+    if woke_deep:
+        return True
+    try:
+        import os
+
+        os.stat("SLEEPING")
+        return True
     except Exception:
         return False
 
@@ -380,7 +414,6 @@ def main():
     """Draw → RTC alarm / deepsleep → wake → draw."""
     import machine
 
-    # Clear leftover wake-test flag so it can't steal boots
     try:
         import os
 
@@ -402,18 +435,34 @@ def main():
         mode = "deep"
 
     woke_deep = False
+    reset_cause = None
     try:
-        woke_deep = machine.reset_cause() == machine.DEEPSLEEP_RESET
+        reset_cause = machine.reset_cause()
+        woke_deep = reset_cause == machine.DEEPSLEEP_RESET
+    except Exception:
+        pass
+    try:
+        print("reset_cause=%s deep=%s" % (reset_cause, woke_deep))
     except Exception:
         pass
 
+    usb_cable = _usb_cable_present()
     usb_now = _should_skip_sleep_for_usb()
+    # Never silent-nap under mpremote — that looks "stuck" on serial
+    if usb_cable:
+        _clear_sleeping()
 
-    # Wake from deepsleep: clear INT; only full-draw inside DRAW_HOURS window
-    if woke_deep and use_alarm:
-        print("=== Wake from deepsleep (alarm path) ===")
-        time.sleep_ms(400)
-        rtc_tuple = None
+    from_sleep = _came_from_sleep(woke_deep) and not usb_cable
+
+    # Silent mid-nap only when returning from our sleep, outside DRAW_HOURS
+    if (
+        enable_sleep
+        and draw_hours
+        and from_sleep
+        and not alarm_test_min
+        and (test_s is None or int(test_s) <= 0)
+    ):
+        time.sleep_ms(200)
         try:
             from machine import Pin
             from drivers.rtc_ds3231 import DS3231
@@ -421,8 +470,7 @@ def main():
             rtc = DS3231()
             pin_n = int(_load_optional("RTC_INT_PIN", 3))
             pin = Pin(pin_n, Pin.IN, Pin.PULL_UP)
-            a1f = bool(rtc.alarm1_fired())
-            print("A1F=%s GP%d=%d" % (a1f, pin_n, pin.value()))
+            print("A1F=%s GP%d=%d" % (rtc.alarm1_fired(), pin_n, pin.value()))
             rtc.clear_alarm_flags()
             for _ in range(40):
                 if pin.value() == 1:
@@ -430,46 +478,46 @@ def main():
                 rtc.clear_alarm_flags()
                 time.sleep_ms(25)
             if pin.value() == 0:
-                # Stuck INT used to force a full Wi‑Fi draw every nap — drain UPS
-                print("INT stuck LOW after clear — disable alarm IRQ")
+                print("INT stuck LOW — disable alarm IRQ")
                 try:
                     rtc.disable_alarms()
                 except Exception:
                     pass
             rtc_tuple = rtc.datetime()
         except Exception as e:
-            print("Alarm clear:", e)
+            print("RTC gate:", e)
             rtc_tuple, _ = _read_rtc_tuple()
 
         _y, _mo, _d, _w, hour, minute, second = rtc_tuple
-        # Gate on clock window only (not pin-low). Mid-naps must stay silent.
-        if alarm_test_min:
-            at_window = True
-        elif draw_hours:
-            at_window = should_draw_now(hour, minute, second, draw_hours=draw_hours)
-        else:
-            at_window = True
+        at_window = should_draw_now(hour, minute, second, draw_hours=draw_hours)
+        print("RTC %02d:%02d:%02d window=%s" % (hour, minute, second, at_window))
         if not at_window:
             print(
-                "Mid-nap %02d:%02d:%02d — silent deepsleep again (no Wi‑Fi/draw)"
+                "Mid-nap %02d:%02d:%02d — silent sleep (no Wi‑Fi/draw)"
                 % (hour, minute, second)
             )
             status_led.off()
             _enter_sleep(hour, minute, second, interval_h, test_s, mode, draw_hours)
             return
         print("Draw window — fetching dashboard")
+        _clear_sleeping()
         _splash("WAKE", "%02d:%02d" % (hour, minute))
-    elif woke_deep and not usb_now:
+    elif woke_deep and not usb_cable:
         print("=== Wake from deepsleep ===")
         time.sleep_ms(300)
+        _clear_sleeping()
         _splash("WAKE", "fetching...")
     else:
         print("Dashboard starting in 3s (Ctrl+C / mpremote OK now)...")
         time.sleep_ms(3000)
+        if usb_cable:
+            print("USB cable detected — full draw (deploy mode).")
         if usb_now:
-            print("USB host detected — will skip deepsleep after draw (deploy mode).")
+            print("Will skip deepsleep after draw while USB stays connected.")
         if alarm_test_min:
             print("Alarm test: unplug during countdown after draw.")
+
+    _clear_sleeping()
 
     print("=== Pico desk dashboard ===")
     if alarm_test_min:
@@ -486,24 +534,18 @@ def main():
     else:
         print("Sleep:", enable_sleep, "every", interval_h, "h mode=%s" % mode)
 
-    # Timed mid-naps when not using RTC alarm path
     if (
         enable_sleep
-        and woke_deep
-        and not usb_now
-        and not use_alarm
+        and from_sleep
+        and not draw_hours
         and (test_s is None or int(test_s) <= 0)
         and mode == "deep"
     ):
         rtc_tuple, _rtc = _read_rtc_tuple()
         _y, _mo, _d, _w, hour, minute, second = rtc_tuple
         print("RTC gate:", "%02d:%02d:%02d" % (hour, minute, second))
-        if draw_hours:
-            at_window = should_draw_now(hour, minute, second, draw_hours=draw_hours)
-        else:
-            legacy = tuple(range(0, 24, max(1, interval_h)))
-            at_window = should_draw_now(hour, minute, second, draw_hours=legacy)
-        if not at_window:
+        legacy = tuple(range(0, 24, max(1, interval_h)))
+        if not should_draw_now(hour, minute, second, draw_hours=legacy):
             print("Not at draw window — deepsleep again (no redraw).")
             status_led.off()
             _enter_sleep(hour, minute, second, interval_h, test_s, mode, draw_hours)
@@ -554,7 +596,7 @@ def main():
         try:
             from drivers.usb_power import usb_connected
 
-            print("VBUS sense=%s (ignored unless SKIP_SLEEP_WHEN_USB)" % usb_connected())
+            print("VBUS sense=%s" % usb_connected())
         except Exception:
             pass
 

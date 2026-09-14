@@ -24,7 +24,7 @@ CURSOR_API_KEY = "key_xxx"
 CURSOR_AGENT_ID = "bc-xxxxxxxx-workout-agent"
 AGENT_PROMPT_ON_REFRESH = True  # False = only read existing runs
 AGENT_POLL_SECONDS = 8
-AGENT_POLL_TIMEOUT = 240
+AGENT_POLL_TIMEOUT = 90  # keep short on UPS
 # AGENT_STATUS_PROMPT = None  # optional override; see net/cursor_agent.py STATUS_PROMPT
 
 
@@ -51,6 +51,6 @@ RTC_INT_PIN = 3
 RTC_ALARM_TEST_MINUTES = None  # or 3 for quick alarm test; None = DRAW_HOURS
 SLEEP_MODE = "deep"
 SLEEP_WHEN_USB = False  # legacy; prefer SKIP_SLEEP_WHEN_USB
-SKIP_SLEEP_WHEN_USB = False  # True only while developing on laptop USB
+SKIP_SLEEP_WHEN_USB = True  # stay awake after draw while laptop USB plugged in
 UNPLUG_COUNTDOWN_SECONDS = 10
 

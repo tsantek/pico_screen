@@ -1,6 +1,8 @@
 # Pico e-ink dashboard — ignore local secrets
 firmware/secrets.py
 firmware/rtc_now.py
+.pico_port
+.firmware_cache/
 __pycache__/
 *.pyc
 .DS_Store
